@@ -676,7 +676,6 @@ class Amazon:
                 return False
 
             atc_buttons = self.driver.find_elements_by_xpath(
-<<<<<<< HEAD
                 "//div[@id='aod-pinned-offer' or @id='aod-offer' or @id='olpOfferList']//input[@name='submit.addToCart']"
             )
             # if not atc_buttons:
@@ -693,13 +692,6 @@ class Amazon:
             #     if offer_count.get_attribute("value") == "0":
             #         log.info("Found zero offers explicitly.  Moving to next ASIN.")
             #         return False
-=======
-                '//*[@name="submit.addToCart"]'
-            ) or self.driver.find_element_by_xpath(
-                 '/html/body/div[1]/span/span/span/div/div/div[2]/div/div[1]/div/div[2]/div[3]/div/div[2]/form/span/span/span/span/input'
-            )
-
->>>>>>> fe138ac (implement random workaround)
             if atc_buttons:
                 # Early out if we found buttons
                 break
@@ -708,9 +700,14 @@ class Amazon:
             try:
                 test = self.driver.find_element_by_xpath(
                     '//*[@id="olpOfferList"]/div/p'
-                ) or self.driver.find_element_by_xpath(
-                     '//*[@id="aod-filter-offer-count-string"]'
                 )
+                if not test:
+                    try:
+                        text = self.driver.find_element_by_xpath(
+                            '//*[@id="aod-filter-offer-count-string"]'
+                        )
+                    except:
+                        pass
             except sel_exceptions.NoSuchElementException:
                 pass
 
@@ -725,9 +722,8 @@ class Amazon:
         while True:
             prices = self.driver.find_elements_by_xpath(
                 '//*[@class="a-size-large a-color-price olpOfferPrice a-text-bold"]'
-            ) or self.driver.find_elements_by_xpath(
-                '//*[@id="aod-filter-offer-count-string"]'
             )
+<<<<<<< HEAD
 <<<<<<< HEAD
             if not prices:
                 # Try the flyout x-paths
@@ -745,6 +741,17 @@ class Amazon:
 
             if prices or prices_2:
 >>>>>>> fe138ac (implement random workaround)
+=======
+            if not prices:
+                try:
+                    prices = self.driver.find_elements_by_xpath(
+                        '//*[@id="aod-filter-offer-count-string"]'
+                    )
+                except:
+                    false
+
+            if prices:
+>>>>>>> 55d4f2f (trash)
                 break
 
             if time.time() > timeout:
@@ -1528,10 +1535,15 @@ class Amazon:
             else:
                 prefs["profile.managed_default_content_settings.images"] = 0
             options.add_experimental_option("prefs", prefs)
+<<<<<<< HEAD
             path_to_profile = os.path.join(
                 os.path.dirname(os.path.abspath("__file__")), ".profile-amz"
             )
             options.add_argument(f"user-data-dir={path_to_profile}")
+=======
+            #options.add_argument(f"user-data-dir=.profile-amz")
+            options.add_argument('--no-sandbox')
+>>>>>>> 55d4f2f (trash)
             if not self.slow_mode:
                 options.set_capability("pageLoadStrategy", "none")
 
@@ -1551,7 +1563,8 @@ class Amazon:
         except FileNotFoundError:
             pass
         try:
-            self.driver = webdriver.Chrome(executable_path=binary_path, options=options)
+            cd_path = os.getenv('CHROMEDRIVER_PATH', binary_path)
+            self.driver = webdriver.Chrome(executable_path=cd_path, options=options)
             self.wait = WebDriverWait(self.driver, 10)
             self.get_webdriver_pids()
         except Exception as e:
