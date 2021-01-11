@@ -18,16 +18,16 @@ websites = (
 )
 
 out = {
-    "asin_groups": 1,
+    "asin_groups": 0,
 }
 for item, values in items.items():
+    out["asin_groups"] += 1
     current = out["asin_groups"]
 
     out[f"asin_list_{current}"] = values["asins"]
     out[f"reserve_min_{current}"] = values["min"]
     out[f"reserve_max_{current}"] = values["max"]
 
-    out["asin_groups"] += 1
 
 cmds = []
 for website in websites:
