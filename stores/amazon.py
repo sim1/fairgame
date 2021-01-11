@@ -31,7 +31,7 @@ AMAZON_URLS = {
 }
 CHECKOUT_URL = "https://{domain}/gp/cart/desktop/go-to-checkout.html/ref=ox_sc_proceed?partialCheckoutCart=1&isToBeGiftWrappedBefore=0&proceedToRetailCheckout=Proceed+to+checkout&proceedToCheckout=1&cartInitiateId={cart_id}"
 
-AUTOBUY_CONFIG_PATH = "config/amazon_config.json"
+AUTOBUY_CONFIG_PATH = os.getenv("AUTOBUY_CONFIG_PATH", "config/amazon_config.json")
 CREDENTIAL_FILE = "config/amazon_credentials.json"
 
 SIGN_IN_TEXT = [

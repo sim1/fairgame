@@ -1,0 +1,6 @@
+AUTOBUY_CONFIG_PATH=config/g_smile_amazon_de python3 app.py amazon --headless &
+AUTOBUY_CONFIG_PATH=config/g_amazon_fr python3 app.py amazon --headless &
+AUTOBUY_CONFIG_PATH=config/g_amazon_co_uk python3 app.py amazon --headless &
+AUTOBUY_CONFIG_PATH=config/g_amazon_nl python3 app.py amazon --headless &
+AUTOBUY_CONFIG_PATH=config/g_amazon_es python3 app.py amazon --headless &
+AUTOBUY_CONFIG_PATH=config/g_amazon_it python3 app.py amazon --headless &
