@@ -745,7 +745,7 @@ class Amazon:
             if not prices:
                 try:
                     prices = self.driver.find_elements_by_xpath(
-                        '//*[@id="aod-filter-offer-count-string"]'
+                        '//*[@id="price_inside_buybox"]'
                     )
                 except:
                     false
