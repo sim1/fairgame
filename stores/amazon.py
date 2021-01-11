@@ -32,6 +32,133 @@ AMAZON_URLS = {
 CHECKOUT_URL = "https://{domain}/gp/cart/desktop/go-to-checkout.html/ref=ox_sc_proceed?partialCheckoutCart=1&isToBeGiftWrappedBefore=0&proceedToRetailCheckout=Proceed+to+checkout&proceedToCheckout=1&cartInitiateId={cart_id}"
 
 AUTOBUY_CONFIG_PATH = "config/amazon_config.json"
+CREDENTIAL_FILE = "config/amazon_credentials.json"
+
+SIGN_IN_TEXT = [
+    "Hello, Sign in",
+    "Sign in",
+    "Hola, Identifícate",
+    "Bonjour, Identifiez-vous",
+    "Ciao, Accedi",
+    "Hallo, Anmelden",
+    "Hallo, Inloggen",
+]
+SIGN_IN_TITLES = [
+    "Amazon Sign In",
+    "Amazon Sign-In",
+    "Amazon Anmelden",
+    "Iniciar sesión en Amazon",
+    "Connexion Amazon",
+    "Amazon Accedi",
+    "Inloggen bij Amazon",
+]
+CAPTCHA_PAGE_TITLES = ["Robot Check"]
+HOME_PAGE_TITLES = [
+    "Amazon.com: Online Shopping for Electronics, Apparel, Computers, Books, DVDs & more",
+    "AmazonSmile: You shop. Amazon gives.",
+    "Amazon.ca: Low Prices – Fast Shipping – Millions of Items",
+    "Amazon.co.uk: Low Prices in Electronics, Books, Sports Equipment & more",
+    "Amazon.de: Low Prices in Electronics, Books, Sports Equipment & more",
+    "Amazon.de: Günstige Preise für Elektronik & Foto, Filme, Musik, Bücher, Games, Spielzeug & mehr",
+    "Amazon.es: compra online de electrónica, libros, deporte, hogar, moda y mucho más.",
+    "Amazon.de: Günstige Preise für Elektronik & Foto, Filme, Musik, Bücher, Games, Spielzeug & mehr",
+    "Amazon.fr : livres, DVD, jeux vidéo, musique, high-tech, informatique, jouets, vêtements, chaussures, sport, bricolage, maison, beauté, puériculture, épicerie et plus encore !",
+    "Amazon.it: elettronica, libri, musica, fashion, videogiochi, DVD e tanto altro",
+    "Amazon.nl: Groot aanbod, kleine prijzen in o.a. Elektronica, boeken, sport en meer",  # this site doesn't work anymore
+    "Amazon.se: Låga priser på Elektronik, Böcker, Sportutrustning & mer",  # this site doesn't work anymore
+]
+SHOPING_CART_TITLES = [
+    "Amazon.com Shopping Cart",
+    "Amazon.ca Shopping Cart",
+    "Amazon.co.uk Shopping Basket",
+    "Amazon.de Basket",
+    "Amazon.de Einkaufswagen",
+    "AmazonSmile Einkaufswagen",
+    "Cesta de compra Amazon.es",
+    "Amazon.fr Panier",
+    "Carrello Amazon.it",
+    "AmazonSmile Shopping Cart",
+    "AmazonSmile Shopping Basket",
+    "Amazon.nl-winkelwagen",
+]
+CHECKOUT_TITLES = [
+    "Amazon.com Checkout",
+    "Amazon.co.uk Checkout",
+    "Place Your Order - Amazon.ca Checkout",
+    "Place Your Order - Amazon.co.uk Checkout",
+    "Amazon.de Checkout",
+    "Place Your Order - Amazon.de Checkout",
+    "Amazon.de - Bezahlvorgang",
+    "Bestellung aufgeben - Amazon.de-Bezahlvorgang",
+    "Place Your Order - Amazon.com Checkout",
+    "Place Your Order - Amazon.com",
+    "Tramitar pedido en Amazon.es",
+    "Processus de paiement Amazon.com",
+    "Confirmar pedido - Compra Amazon.es",
+    "Passez votre commande - Processus de paiement Amazon.fr",
+    "Ordina - Cassa Amazon.it",
+    "AmazonSmile Checkout",
+    "Plaats je bestelling - Amazon.nl-kassa",
+    "Place Your Order - AmazonSmile Checkout",
+    "Preparing your order",
+    "Ihre Bestellung wird vorbereitet",
+]
+ORDER_COMPLETE_TITLES = [
+    "Amazon.com Thanks You",
+    "Amazon.ca Thanks You",
+    "AmazonSmile Thanks You",
+    "Thank you",
+    "Amazon.fr Merci",
+    "Merci",
+    "Amazon.es te da las gracias",
+    "Amazon.fr vous remercie.",
+    "Grazie da Amazon.it",
+    "Hartelijk dank",
+    "Thank You",
+    "Amazon.de Vielen Dank",
+]
+ADD_TO_CART_TITLES = [
+    "Amazon.com: Please Confirm Your Action",
+    "Amazon.de: Bitte bestätigen Sie Ihre Aktion",
+    "Amazon.de: Please Confirm Your Action",
+    "Amazon.es: confirma tu acción",
+    "Amazon.com : Veuillez confirmer votre action",  # Careful, required non-breaking space after .com (&nbsp)
+    "Amazon.it: confermare l'operazione",
+    "AmazonSmile: Please Confirm Your Action",
+    "",  # Amazon.nl has en empty title, sigh.
+]
+BUSINESS_PO_TITLES = [
+    "Business order information",
+]
+
+DOGGO_TITLES = ["Sorry! Something went wrong!"]
+
+# this is not non-US friendly
+SHIPPING_ONLY_IF = "FREE Shipping on orders over"
+
+TWOFA_TITLES = ["Two-Step Verification"]
+
+PRIME_TITLES = ["Complete your Amazon Prime sign up"]
+
+OUT_OF_STOCK = ["Out of Stock - AmazonSmile Checkout"]
+
+NO_SELLERS = [
+    "Currently, there are no other sellers matching your location and / or item specification. Try updating the filters or your location to find additional sellers.",
+    "Currently, there are no sellers that can deliver this item to your location.",
+    "There are currently no listings for this search. Try a different refinement.",
+    "There are currently no listings for this product in . Try changing the condition type.",
+    "Actualmente, no hay listas para este producto en . Intenta cambiar el tipo de condición.",
+    "Derzeit gibt es keine Verkäufer, die diesen Artikel an Ihren Standort liefern können.",
+    "Actualmente, no hay vendedores que puedan entregar este producto en tu ubicación.",
+    "Il n’y a actuellement aucun vendeur en mesure de livrer ce produit sur votre zone géographique.",
+    "Il n'y a actuellement pas de produits répondant à ces critères. Essayez de changer les filtres.",
+    "No existen listados para esta búsqueda. Probar con otro filtro.",
+    "In gibt es derzeit keine Listungen für dieses Produkt. Versuchen Sie, den Zustandstyp zu ändern.",
+    "Al momento, non ci sono seller in grado di spedire questo articolo alla tua sede.",
+    "Al momento non ci sono offerte per questo prodotto in . Prova a modificare il tipo di condizione.",
+]
+
+# OFFER_PAGE_TITLES = ["Amazon.com: Buying Choices:"]
 
 BUTTON_XPATHS = [
     '//*[@id="submitOrderButtonId"]/span/input',
@@ -549,6 +676,7 @@ class Amazon:
                 return False
 
             atc_buttons = self.driver.find_elements_by_xpath(
+<<<<<<< HEAD
                 "//div[@id='aod-pinned-offer' or @id='aod-offer' or @id='olpOfferList']//input[@name='submit.addToCart']"
             )
             # if not atc_buttons:
@@ -565,6 +693,13 @@ class Amazon:
             #     if offer_count.get_attribute("value") == "0":
             #         log.info("Found zero offers explicitly.  Moving to next ASIN.")
             #         return False
+=======
+                '//*[@name="submit.addToCart"]'
+            ) or self.driver.find_element_by_xpath(
+                 '/html/body/div[1]/span/span/span/div/div/div[2]/div/div[1]/div/div[2]/div[3]/div/div[2]/form/span/span/span/span/input'
+            )
+
+>>>>>>> fe138ac (implement random workaround)
             if atc_buttons:
                 # Early out if we found buttons
                 break
@@ -573,6 +708,8 @@ class Amazon:
             try:
                 test = self.driver.find_element_by_xpath(
                     '//*[@id="olpOfferList"]/div/p'
+                ) or self.driver.find_element_by_xpath(
+                     '//*[@id="aod-filter-offer-count-string"]'
                 )
             except sel_exceptions.NoSuchElementException:
                 pass
@@ -588,7 +725,10 @@ class Amazon:
         while True:
             prices = self.driver.find_elements_by_xpath(
                 '//*[@class="a-size-large a-color-price olpOfferPrice a-text-bold"]'
+            ) or self.driver.find_elements_by_xpath(
+                '//*[@id="aod-filter-offer-count-string"]'
             )
+<<<<<<< HEAD
             if not prices:
                 # Try the flyout x-paths
                 prices = self.driver.find_elements_by_xpath(
@@ -598,7 +738,15 @@ class Amazon:
                     flyout_mode = True
                     break
             if prices:
+=======
+
+            if prices_2:
+                prices = prices_2
+
+            if prices or prices_2:
+>>>>>>> fe138ac (implement random workaround)
                 break
+
             if time.time() > timeout:
                 log.info(f"failed to load prices for {asin}, going to next ASIN")
                 return False
