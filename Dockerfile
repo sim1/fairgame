@@ -9,6 +9,9 @@ RUN apk add --virtual=.run-deps chromium chromium-chromedriver openssl zlib libj
     pipenv lock --requirements > requirements.txt && \
     pip install -r requirements.txt
 
-ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
+ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver \
+    CREDENTIAL_FILE=/config/credentials \
+    AUTOBUY_CONFIG_PATH=/config/config
+
 COPY . /app
 CMD ["python3", "app.py", "amazon", "--headless"]
