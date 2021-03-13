@@ -1,5 +1,5 @@
 {
-  "asin_groups": 5,
+  "asin_groups": 3,
   "asin_list_1": [
     "B08MVC76SR",
     "B08N6ZLX9B",
@@ -14,12 +14,6 @@
   "reserve_min_1": 600,
   "reserve_max_1": 900,
   "asin_list_2": [
-    "B08FC5L3RG",
-    "B08FC6MR62"
-  ],
-  "reserve_min_2": 400,
-  "reserve_max_2": 500,
-  "asin_list_3": [
     "B08L8LG4M3",
     "B08L8HPKR6",
     "B08L8JNTXQ",
@@ -40,9 +34,9 @@
     "B08LF32LJ6",
     "B08LF1CWT2"
   ],
-  "reserve_min_3": 400,
-  "reserve_max_3": 600,
-  "asin_list_4": [
+  "reserve_min_2": 400,
+  "reserve_max_2": 600,
+  "asin_list_2": [
     "B08HH5WF97",
     "B08HHDP9DW",
     "B08J6F174Z",
@@ -61,23 +55,7 @@
     "B08HJNKT3P",
     "B08HVV2P4Z"
   ],
-  "reserve_min_4": 400,
-  "reserve_max_4": 900,
-  "asin_list_5": [
-    "B08HJGNJ81",
-    "B08HJLLF7G",
-    "B08J6GMWCQ",
-    "B08HJRF2CN",
-    "B08HJPDJTY",
-    "B08KTYZXR9",
-    "B083GTG25Q",
-    "B08HRBW6VB",
-    "B08HR9D2JS",
-    "B08HBQWBHH",
-    "B08HBVX53D",
-    "B08HJQ182D"
-  ],
-  "reserve_min_5": 500,
-  "reserve_max_5": 900,
+  "reserve_min_2": 400,
+  "reserve_max_2": 900,
   "amazon_website": "smile.amazon.de"
 }
