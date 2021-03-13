@@ -1,21 +1,45 @@
+#      FairGame - Automated Purchasing Program
+#      Copyright (C) 2021  Hari Nagarajan
+#
+#      This program is free software: you can redistribute it and/or modify
+#      it under the terms of the GNU General Public License as published by
+#      the Free Software Foundation, either version 3 of the License, or
+#      (at your option) any later version.
+#
+#      This program is distributed in the hope that it will be useful,
+#      but WITHOUT ANY WARRANTY; without even the implied warranty of
+#      MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#      GNU General Public License for more details.
+#
+#      You should have received a copy of the GNU General Public License
+#      along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+#      The author may be contacted through the project's GitHub, at:
+#      https://github.com/Hari-Nagarajan/fairgame
+
 import fileinput
 import json
 import math
 import os
 import platform
 import time
+from contextlib import contextmanager
 from datetime import datetime
+from enum import Enum
 
 import psutil
 from amazoncaptcha import AmazonCaptcha
 from chromedriver_py import binary_path  # this will get you the path variable
 from furl import furl
 from lxml import html
-from price_parser import parse_price
+from price_parser import parse_price, Price
 from pypresence import exceptions as pyexceptions
 from selenium import webdriver
 from selenium.common import exceptions as sel_exceptions
+from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.remote.webelement import WebElement
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from utils import discord_presence as presence
@@ -26,15 +50,17 @@ from utils.selenium_utils import options, enable_headless
 # Optional OFFER_URL is:     "OFFER_URL": "https://{domain}/dp/",
 AMAZON_URLS = {
     "BASE_URL": "https://{domain}/",
-    "OFFER_URL": "https://{domain}/gp/offer-listing/",
+    "ALT_OFFER_URL": "https://{domain}/gp/offer-listing/",
+    "OFFER_URL": "https://{domain}/dp/",
     "CART_URL": "https://{domain}/gp/cart/view.html",
+    "ATC_URL": "https://{domain}/gp/aws/cart/add.html",
 }
 CHECKOUT_URL = "https://{domain}/gp/cart/desktop/go-to-checkout.html/ref=ox_sc_proceed?partialCheckoutCart=1&isToBeGiftWrappedBefore=0&proceedToRetailCheckout=Proceed+to+checkout&proceedToCheckout=1&cartInitiateId={cart_id}"
 
-UTOBUY_CONFIG_PATH = os.getenv("AUTOBUY_CONFIG_PATH", "config/amazon_config.json")
-REDENTIAL_FILE = os.getenv("CREDENTIAL_FILE", "config/amazon_credentials.json")
+AUTOBUY_CONFIG_PATH = "config/amazon_config.json"
 
 BUTTON_XPATHS = [
+    '//input[@name="placeYourOrder1"]',
     '//*[@id="submitOrderButtonId"]/span/input',
     '//*[@id="bottomSubmitOrderButtonId"]/span/input',
     '//*[@id="placeYourOrder"]/span/input',
@@ -81,6 +107,7 @@ class Amazon:
         encryption_pass=None,
         log_stock_check=False,
         shipping_bypass=False,
+        alt_offers=False,
     ):
         self.notification_handler = notification_handler
         self.asin_list = []
@@ -90,6 +117,10 @@ class Amazon:
         self.button_xpaths = BUTTON_XPATHS
         self.detailed = detailed
         self.used = used
+        if used:
+            self.condition = AmazonItemCondition.UsedAcceptable
+        else:
+            self.condition = AmazonItemCondition.New
         self.single_shot = single_shot
         self.take_screenshots = not no_screenshots
         self.start_time = time.time()
@@ -105,12 +136,15 @@ class Amazon:
         self.log_stock_check = log_stock_check
         self.shipping_bypass = shipping_bypass
         self.unknown_title_notification_sent = False
+        self.alt_offers = alt_offers
+
         presence.enabled = not disable_presence
 
         global amazon_config
         from cli.cli import global_config
 
         amazon_config = global_config.get_amazon_config(encryption_pass)
+        self.profile_path = global_config.get_browser_profile_path()
 
         try:
             presence.start_presence()
@@ -156,11 +190,16 @@ class Amazon:
             )
             exit(0)
 
-        if not self.create_driver():
+        if not self.create_driver(self.profile_path):
             exit(1)
 
         for key in AMAZON_URLS.keys():
             AMAZON_URLS[key] = AMAZON_URLS[key].format(domain=self.amazon_website)
+        if self.alt_offers:
+            log.info("Using alternate page for offer parsing.")
+            self.ACTIVE_OFFER_URL = AMAZON_URLS["ALT_OFFER_URL"]
+        else:
+            self.ACTIVE_OFFER_URL = AMAZON_URLS["OFFER_URL"]
 
     def run(self, delay=DEFAULT_REFRESH_DELAY, test=False):
         self.testing = test
@@ -184,6 +223,7 @@ class Amazon:
         if cart_quantity > 0:
             log.warning(f"Found {cart_quantity} item(s) in your cart.")
             log.info("Delete all item(s) in cart before starting bot.")
+            self.driver.get(AMAZON_URLS["CART_URL"])
             log.info("Exiting in 30 seconds...")
             time.sleep(30)
             return
@@ -197,8 +237,9 @@ class Amazon:
         if self.get_cart_count() > 0:
             log.warning(f"Found {cart_quantity} item(s) in your cart.")
             log.info("Delete all item(s) in cart before starting bot.")
-            log.info("Exiting now...")
-            time.sleep(5)
+            self.driver.get(AMAZON_URLS["CART_URL"])
+            log.info("Exiting in 30 seconds...")
+            time.sleep(30)
             return
 
         keep_going = True
@@ -364,7 +405,7 @@ class Amazon:
             # check for captcha
             try:
                 captcha_entry = self.driver.find_element_by_xpath(
-                    '//*[@id="auth-captcha-guess"]'
+                    '//form[contains(@action,"validateCaptcha")]'
                 )
             except sel_exceptions.NoSuchElementException:
                 password_field.send_keys(Keys.RETURN)
@@ -373,33 +414,12 @@ class Amazon:
             log.error("Password entry box did not exist")
 
         if captcha_entry:
-            try:
-                log.info("Stuck on a captcha... Lets try to solve it.")
-                captcha = AmazonCaptcha.fromdriver(self.driver)
-                solution = captcha.solve()
-                log.info(f"The solution is: {solution}")
-                if solution == "Not solved":
-                    log.info(
-                        f"Failed to solve {captcha.image_link}, lets reload and get a new captcha."
-                    )
-                    self.driver.refresh()
-                else:
-                    self.send_notification(
-                        "Solving catpcha", "captcha", self.take_screenshots
-                    )
-                    captcha_entry.send_keys(solution + Keys.RETURN)
-                    self.wait_for_page_change(current_page)
-
-            except Exception as e:
-                log.debug(e)
-                log.info("Error trying to solve captcha. Refresh and retry.")
-                self.driver.refresh()
-                time.sleep(5)
-
+            self.handle_captcha(False)
         if self.driver.title in amazon_config["TWOFA_TITLES"]:
             log.info("enter in your two-step verification code in browser")
-            while self.driver.title in amazon_config["WOFA_TITLES"]:
-                time.sleep(0.2)
+            while self.driver.title in amazon_config["TWOFA_TITLES"]:
+                # Wait for the user to enter 2FA
+                time.sleep(2)
         log.info(f'Logged in as {amazon_config["username"]}')
 
     @debug
@@ -421,26 +441,36 @@ class Amazon:
         if retry > DEFAULT_MAX_ATC_TRIES:
             log.info("max add to cart retries hit, returning to asin check")
             return False
-        if self.checkshipping:
-            if self.used:
-                f = furl(AMAZON_URLS["OFFER_URL"] + asin)
+
+        if self.alt_offers:
+            if self.checkshipping:
+                if self.used:
+                    f = furl(self.ACTIVE_OFFER_URL + asin)
+                else:
+                    f = furl(self.ACTIVE_OFFER_URL + asin + "/ref=olp_f_new&f_new=true")
             else:
-                f = furl(AMAZON_URLS["OFFER_URL"] + asin + "/ref=olp_f_new&f_new=true")
+                if self.used:
+                    f = furl(self.ACTIVE_OFFER_URL + asin + "/f_freeShipping=on")
+                else:
+                    f = furl(
+                        self.ACTIVE_OFFER_URL
+                        + asin
+                        + "/ref=olp_f_new&f_new=true&f_freeShipping=on"
+                    )
         else:
-            if self.used:
-                f = furl(AMAZON_URLS["OFFER_URL"] + asin + "/f_freeShipping=on")
-            else:
-                f = furl(
-                    AMAZON_URLS["OFFER_URL"]
-                    + asin
-                    + "/ref=olp_f_new&f_new=true&f_freeShipping=on"
-                )
+            # Force the flyout by default
+            f = furl(self.ACTIVE_OFFER_URL + asin + "/#aod")
         fail_counter = 0
         presence.searching_update()
 
+        # handles initial page load only
         while True:
             try:
                 self.get_page(f.url)
+                log.debug(f"Initial page title {self.driver.title}")
+                log.debug(f"        page url: {self.driver.current_url}")
+                if self.driver.title in amazon_config["CAPTCHA_PAGE_TITLES"]:
+                    self.handle_captcha()
                 break
             except Exception:
                 fail_counter += 1
@@ -463,7 +493,7 @@ class Amazon:
                             take_screenshot=False,
                         )
                         raise RuntimeError("Failed to restart bot")
-                    elif not self.create_driver():
+                    elif not self.create_driver(self.profile_path):
                         log.error("Failed to recreate webdriver processes")
                         log.error("Please restart bot")
                         self.send_notification(
@@ -482,19 +512,32 @@ class Amazon:
         while True:
             # Sanity check to see if we have any offers
             try:
-                offers_exist = WebDriverWait(
+                # Wait for the page to load before determining what's in it by looking for the footer
+                footer: WebElement = WebDriverWait(
                     self.driver, timeout=DEFAULT_MAX_TIMEOUT
                 ).until(
+                    lambda d: d.find_elements_by_xpath(
+                        "//div[@class='nav-footer-line'] | //img[@alt='Dogs of Amazon']"
+                    )
+                )
+                if footer and footer[0].tag_name == "img":
+                    log.info(f"Saw dogs for {asin}.  Skipping...")
+                    return False
+
+                log.debug(f"After footer page title {self.driver.title}")
+                log.debug(f"             page url: {self.driver.current_url}")
+
+                offers = WebDriverWait(self.driver, timeout=DEFAULT_MAX_TIMEOUT).until(
                     lambda d: d.find_element_by_xpath(
                         "//div[@id='aod-container'] | "
                         "//div[@id='olpOfferList'] | "
-                        "//span[@data-action='show-all-offers-display'] | "
                         "//div[@id='backInStock' or @id='outOfStock'] |"
+                        "//span[@data-action='show-all-offers-display'] | "
                         "//input[@name='submit.add-to-cart' and not(//span[@data-action='show-all-offers-display'])]"
                     )
                 )
                 offer_count = []
-                offer_id = offers_exist.get_attribute("id")
+                offer_id = offers.get_attribute("id")
                 if offer_id == "outOfStock" or offer_id == "backInStock":
                     # No dice... Early out and move on
                     log.info("Item is currently unavailable.  Moving on...")
@@ -508,48 +551,98 @@ class Amazon:
                 elif offer_id == "aod-container":
                     # Offer Flyout or Ajax call ... count the 'aod-offer' divs that we 'see'
                     offer_count = self.driver.find_elements_by_xpath(
-                        "//div[@id='aod-pinned-offer' or @id='aod-offer']"
+                        "//div[@id='aod-pinned-offer' or @id='aod-offer']//input[@name='submit.addToCart']"
                     )
-                elif (
-                    offers_exist.get_attribute("data-action")
-                    == "show-all-offers-display"
-                ):
-                    # No offers to parse... look for a link to the offers
-                    log.info("Attempting to click the open offers link...")
-                    self.driver.find_element_by_xpath(
+                elif offers.get_attribute("data-action") == "show-all-offers-display":
+                    # PDP Page
+                    # Find the offers link first, just to burn some cycles in case the flyout is loading
+                    open_offers_link: WebElement = self.driver.find_element_by_xpath(
                         "//span[@data-action='show-all-offers-display']//a"
-                    ).click()
-                    # Now wait for the flyout to load
-                    log.info("Waiting for flyout... probably")
-                    WebDriverWait(self.driver, timeout=DEFAULT_MAX_TIMEOUT).until(
-                        lambda d: d.find_element_by_xpath(
-                            "//div[@id='aod-container'] | //div[@id='olpOfferList']"
-                        )
                     )
-                    log.info("It flew out?!")
+
+                    # Now check to see if we're already loading the flyout...
+                    flyout = self.driver.find_elements_by_xpath(
+                        "/html/body/div[@id='all-offers-display']"
+                    )
+                    if flyout:
+                        # This means we have a flyout already loading, as it gets inserted as the first
+                        # div after the body tag of the document.  Wait for the container to load and start
+                        # the loop again to scan for known elements
+                        log.debug(
+                            "Found a loading flyout div.  Waiting for offers to load..."
+                        )
+                        WebDriverWait(self.driver, timeout=DEFAULT_MAX_TIMEOUT).until(
+                            lambda d: d.find_element_by_xpath(
+                                "//div[@id='aod-container']  "
+                            )
+                        )
+                        continue
+
+                    log.debug("Attempting to click the open offers link...")
+                    open_offers_link.click()
+                    try:
+                        # Now wait for the flyout to load
+                        log.debug("Waiting for flyout...")
+                        WebDriverWait(self.driver, timeout=DEFAULT_MAX_TIMEOUT).until(
+                            lambda d: d.find_element_by_xpath(
+                                "//div[@id='aod-container'] | //div[@id='olpOfferList']"
+                            )
+                        )
+                        log.debug("Flyout should be open and populated.")
+                    except sel_exceptions.TimeoutException as te:
+                        log.error(
+                            "Timed out waiting for the flyout to open and populate.  Is the "
+                            "connection slow?  Do you see the flyout populate?"
+                        )
                     continue
-                else:
+                elif (
+                    offers.get_attribute("aria-labelledby")
+                    == "submit.add-to-cart-announce"
+                ):
                     # This assumes we're on a PDP with only an add to cart button... no offers
                     log.warning(
-                        "NOT YET IMPLEMENTED: PDP represents only item worth considering.  Parse pricing and Add To Cart from PDP if item qualifies."
+                        "NOT YET IMPLEMENTED: PDP represents only item worth considering.  No other sellers available."
+                        " TODO: Parse pricing and Add To Cart from PDP if item qualifies."
                     )
+                else:
+                    log.warning(
+                        "We found elements, but didn't recognize any of the combinations."
+                    )
+                    log.warning(f"Element found: {offers.tag_name}")
+                    attrs = self.driver.execute_script(
+                        "var items = {}; "
+                        "for (index = 0; index < arguments[0].attributes.length; ++index) "
+                        "{ items[arguments[0].attributes[index].name] = arguments[0].attributes[index].value }; "
+                        "return items;",
+                        offers,
+                    )
+                    log.warning("Dumping element attributes:")
+                    for attr in attrs:
+                        log.warning(f"{attr} = {attrs[attr]}")
+
                     return False
                 if len(offer_count) == 0:
                     log.info("No offers found.  Moving on.")
                     return False
                 log.info(
-                    f"Found {len(offer_count)} offers in the HTML.  Attempting to parse..."
+                    f"Found {len(offer_count)} offers for {asin}.  Evaluating offers..."
                 )
 
-            except sel_exceptions.TimeoutException:
+            except sel_exceptions.TimeoutException as te:
                 log.error("Timed out waiting for offers to render.  Skipping...")
                 log.error(f"URL: {self.driver.current_url}")
+                log.exception(te)
                 return False
             except sel_exceptions.NoSuchElementException:
                 log.error("Unable to find any offers listing.  Skipping...")
                 return False
+            except sel_exceptions.ElementClickInterceptedException as e:
+                log.debug(
+                    "Covering element detected... Assuming it's a slow flyout... scanning document again..."
+                )
+                continue
 
-            atc_buttons = self.driver.find_elements_by_xpath(
+            atc_buttons: WebElement = self.driver.find_elements_by_xpath(
                 "//div[@id='aod-pinned-offer' or @id='aod-offer' or @id='olpOfferList']//input[@name='submit.addToCart']"
             )
             # if not atc_buttons:
@@ -645,6 +738,24 @@ class Amazon:
             log.debug(f"\tShipping Price: {shipping_price}")
 
         for idx, atc_button in enumerate(atc_buttons):
+            # Condition check first, using the button to find the form that will divulge the item's condition
+            if flyout_mode:
+                condition: WebElement = atc_button.find_elements_by_xpath(
+                    "./ancestor::form[@method='post']"
+                )
+
+                if condition:
+                    atc_form_action = condition[0].get_attribute("action")
+                    item_condition = get_item_condition(atc_form_action)
+                    # Lower condition value imply newer
+                    if item_condition.value > self.condition.value:
+                        # Item is below our standards, so skip it
+                        log.debug(
+                            f"Skipping item because its condition is below the requested level: "
+                            f"{item_condition} is below {self.condition}"
+                        )
+                        continue
+
             try:
                 if flyout_mode:
                     price = parse_price(prices[idx].get_attribute("innerHTML"))
@@ -676,41 +787,99 @@ class Amazon:
                 or math.isclose((price_float + ship_float), reserve_min, abs_tol=0.01)
             ):
                 log.info("Item in stock and in reserve range!")
-                log.info("clicking add to cart")
-                self.notification_handler.play_notify_sound()
-                if self.detailed:
-                    self.send_notification(
-                        message=f"Found Stock ASIN:{asin}",
-                        page_name="Stock Alert",
-                        take_screenshot=self.take_screenshots,
+                log.info("Adding to cart")
+                # Get the offering ID
+                offering_id_elements = atc_button.find_elements_by_xpath(
+                    "./preceding::input[@name='offeringID.1'][1]"
+                )
+                if offering_id_elements:
+                    log.info("Attempting Add To Cart with offer ID...")
+                    offering_id = offering_id_elements[0].get_attribute("value")
+                    if self.attempt_atc(
+                        offering_id, max_atc_retries=DEFAULT_MAX_ATC_TRIES
+                    ):
+                        return True
+                    else:
+                        self.send_notification(
+                            "Failed Add to Cart after {max-atc-retries}",
+                            "failed-atc",
+                            self.take_screenshots,
+                        )
+                        self.save_page_source("failed-atc")
+                        return False
+                else:
+                    log.error(
+                        "Unable to find offering ID to add to cart.  Using legacy mode."
+                    )
+                    self.notification_handler.play_notify_sound()
+                    if self.detailed:
+                        self.send_notification(
+                            message=f"Found Stock ASIN:{asin}",
+                            page_name="Stock Alert",
+                            take_screenshot=self.take_screenshots,
+                        )
+
+                    presence.buy_update()
+                    current_title = self.driver.title
+                    # log.info(f"current page title is {current_title}")
+                    try:
+                        atc_button.click()
+                    except IndexError:
+                        log.debug("Index Error")
+                        return False
+                    self.wait_for_page_change(current_title)
+                    # log.info(f"page title is {self.driver.title}")
+                    emtpy_cart_elements = self.driver.find_elements_by_xpath(
+                        "//div[contains(@class, 'sc-your-amazon-cart-is-empty') or contains(@class, 'sc-empty-cart')]"
                     )
 
-                presence.buy_update()
-                current_title = self.driver.title
-                # log.info(f"current page title is {current_title}")
-                try:
-                    atc_button.click()
-                except IndexError:
-                    log.debug("Index Error")
-                    return False
-                self.wait_for_page_change(current_title)
-                # log.info(f"page title is {self.driver.title}")
-                if self.driver.title in amazon_config["SHOPPING_CART_TITLES"]:
+                    if (
+                        not emtpy_cart_elements
+                        and self.driver.title in amazon_config["SHOPPING_CART_TITLES"]
+                    ):
+                        return True
+                    else:
+                        log.info("did not add to cart, trying again")
+                        if emtpy_cart_elements:
+                            log.info(
+                                "Cart appeared empty after clicking Add To Cart button"
+                            )
+                        log.debug(f"failed title was {self.driver.title}")
+                        self.send_notification(
+                            "Failed Add to Cart", "failed-atc", self.take_screenshots
+                        )
+                        self.save_page_source("failed-atc")
+                        in_stock = self.check_stock(
+                            asin=asin,
+                            reserve_max=reserve_max,
+                            reserve_min=reserve_min,
+                            retry=retry + 1,
+                        )
+        return in_stock
+
+    def attempt_atc(self, offering_id, max_atc_retries=DEFAULT_MAX_ATC_TRIES):
+        # Open the add.html URL in Selenium
+        f = f"{AMAZON_URLS['ATC_URL']}?OfferListingId.1={offering_id}&Quantity.1=1"
+        atc_attempts = 0
+        while atc_attempts < max_atc_retries:
+            with self.wait_for_page_content_change(timeout=5):
+                self.driver.get(f)
+                xpath = "//input[@value='add' and @name='add']"
+                if wait_for_element_by_xpath(self.driver, xpath):
+                    try:
+                        with self.wait_for_page_content_change(timeout=10):
+                            self.driver.find_element_by_xpath(xpath).click()
+                    except sel_exceptions.NoSuchElementException:
+                        log.error("Continue button not present on page")
+                else:
+                    log.error("Continue button not present on page")
+
+                # verify cart is non-zero
+                if self.get_cart_count() != 0:
                     return True
                 else:
-                    log.info("did not add to cart, trying again")
-                    log.debug(f"failed title was {self.driver.title}")
-                    self.send_notification(
-                        "Failed Add to Cart", "failed-atc", self.take_screenshots
-                    )
-                    self.save_page_source("failed-atc")
-                    in_stock = self.check_stock(
-                        asin=asin,
-                        reserve_max=reserve_max,
-                        reserve_min=reserve_min,
-                        retry=retry + 1,
-                    )
-        return in_stock
+                    atc_attempts = atc_attempts + 1
+        return False
 
     # search lists of asin lists, and remove the first list that matches provided asin
     @debug
@@ -729,6 +898,7 @@ class Amazon:
         # time.sleep(self.page_wait_delay())
 
         title = self.driver.title
+        log.info(f"Navigating page title: '{title}'")
         # see if this resolves blank page title issue?
         if title == "":
             timeout_seconds = DEFAULT_MAX_TIMEOUT
@@ -1032,7 +1202,7 @@ class Amazon:
     @debug
     def handle_cart(self):
         self.start_time_atc = time.time()
-        log.info("clicking checkout.")
+        log.info("Looking for Proceed To Checkout button...")
         try:
             self.save_screenshot("ptc-page")
         except:
@@ -1042,7 +1212,7 @@ class Amazon:
         while True:
             try:
                 button = self.driver.find_element_by_xpath(
-                    '//*[@id="hlb-ptc-btn-native"]'
+                    '//*[@id="hlb-ptc-btn-native"] | //input[@name="proceedToRetailCheckout"]'
                 )
                 break
             except sel_exceptions.NoSuchElementException:
@@ -1074,17 +1244,17 @@ class Amazon:
 
         current_page = self.driver.title
         if button:
+            log.info("Found Checkout Button")
             if self.detailed:
                 self.send_notification(
                     message="Attempting to Proceed to Checkout",
                     page_name="ptc",
                     take_screenshot=self.take_screenshots,
                 )
-            log.info("Found Checkout Button")
             try:
                 button.click()
                 log.info("Clicked Proceed to Checkout Button")
-                self.wait_for_page_change(page_title=current_page)
+                self.wait_for_page_change(page_title=current_page, timeout=7)
             except sel_exceptions.WebDriverException:
                 log.error("Problem clicking Proceed to Checkout button.")
                 log.info("Refreshing page to try again")
@@ -1157,13 +1327,14 @@ class Amazon:
         self.try_to_checkout = False
 
     @debug
-    def handle_captcha(self):
+    def handle_captcha(self, check_presence=True):
         # wait for captcha to load
+        log.debug("Waiting for captcha to load.")
         time.sleep(DEFAULT_MAX_WEIRD_PAGE_DELAY)
         current_page = self.driver.title
         try:
-            if self.driver.find_element_by_xpath(
-                '//form[@action="/errors/validateCaptcha"]'
+            if not check_presence or self.driver.find_element_by_xpath(
+                '//form[contains(@action,"validateCaptcha")]'
             ):
                 try:
                     log.info("Stuck on a captcha... Lets try to solve it.")
@@ -1244,6 +1415,16 @@ class Amazon:
         with open(file_name, "w", encoding="utf-8") as f:
             f.write(page_source)
 
+    @contextmanager
+    def wait_for_page_content_change(self, timeout=30):
+        """Utility to help manage selenium waiting for a page to load after an action, like a click"""
+        old_page = self.driver.find_element_by_tag_name("html")
+        yield
+        WebDriverWait(self.driver, timeout).until(EC.staleness_of(old_page))
+        WebDriverWait(self.driver, timeout).until(
+            EC.presence_of_element_located((By.XPATH, "//title"))
+        )
+
     def wait_for_page_change(self, page_title, timeout=3):
         time_to_end = self.get_timeout(timeout=timeout)
         while time.time() < time_to_end and (
@@ -1313,6 +1494,7 @@ class Amazon:
         log.info(
             f"Starting Amazon ASIN Hunt on {AMAZON_URLS['BASE_URL']} for {len(self.asin_list)} Products with:"
         )
+        log.info(f"--Offer URL of: {self.ACTIVE_OFFER_URL}")
         log.info(f"--Delay of {self.refresh_delay} seconds")
         if self.headless:
             log.info(f"--Chrome is running in Headless mode")
@@ -1350,28 +1532,24 @@ class Amazon:
             log.info(
                 f"--Looking for {len(asins)} ASINs between {self.reserve_min[idx]:.2f} and {self.reserve_max[idx]:.2f}"
             )
+        if not presence.enabled:
+            log.info(f"--Discord Presence feature is disabled.")
         if self.no_image:
             log.info(f"--No images will be requested")
         if not self.notification_handler.sound_enabled:
             log.info(f"--Notification sounds are disabled.")
-        if self.headless:
-            log.warning(
-                f"--Running headless is unsupported.  If you get it to work, please let us know on Discord."
-            )
+        if self.ACTIVE_OFFER_URL == AMAZON_URLS["ALT_OFFER_URL"]:
+            log.info(f"--Using alternate offers URL")
         if self.testing:
             log.warning(f"--Testing Mode.  NO Purchases will be made.")
         log.info(f"{'=' * 50}")
 
-    def create_driver(self):
+    def create_driver(self, path_to_profile):
         if self.setup_driver:
 
             if self.headless:
                 enable_headless()
 
-            # profile_amz = ".profile-amz"
-            # # keep profile bloat in check
-            # if os.path.isdir(profile_amz):
-            #     os.remove(profile_amz)
             prefs = {
                 "profile.password_manager_enabled": False,
                 "credentials_enable_service": False,
@@ -1381,9 +1559,6 @@ class Amazon:
             else:
                 prefs["profile.managed_default_content_settings.images"] = 0
             options.add_experimental_option("prefs", prefs)
-            path_to_profile = os.path.join(
-                os.path.dirname(os.path.abspath("__file__")), ".profile-amz"
-            )
             options.add_argument(f"user-data-dir={path_to_profile}")
             if not self.slow_mode:
                 options.set_capability("pageLoadStrategy", "none")
@@ -1392,8 +1567,7 @@ class Amazon:
 
         # Delete crashed, so restore pop-up doesn't happen
         path_to_prefs = os.path.join(
-            os.path.dirname(os.path.abspath("__file__")),
-            ".profile-amz",
+            path_to_profile,
             "Default",
             "Preferences",
         )
@@ -1404,14 +1578,13 @@ class Amazon:
         except FileNotFoundError:
             pass
         try:
-            cd_path = os.getenv('CHROMEDRIVER_PATH', binary_path)
-            self.driver = webdriver.Chrome(executable_path=cd_path, options=options)
+            self.driver = webdriver.Chrome(executable_path=binary_path, options=options)
             self.wait = WebDriverWait(self.driver, 10)
             self.get_webdriver_pids()
         except Exception as e:
             log.error(e)
             log.error(
-                "If you have a JSON warning above, try deleting your .profile-amz folder"
+                "If you have a JSON warning above, try cleaning your profile (e.g. --clean-profile)"
             )
             log.error(
                 "If that's not it, you probably have a previous Chrome window open. You should close it."
@@ -1457,7 +1630,7 @@ def get_timestamp_filename(name, extension):
         return name + "_" + date + "." + extension
 
 
-def get_shipping_costs(tree, free_shipping_string):
+def get_shipping_costs(tree, free_shipping_string) -> Price:
     # Assume Free Shipping and change otherwise
 
     # Shipping collection xpath:
@@ -1477,8 +1650,32 @@ def get_shipping_costs(tree, free_shipping_string):
     # Shipping information is found within either a DIV or a SPAN following the bottleDepositFee DIV
     # What follows is logic to parse out the various pricing formats within the HTML.  Not ideal, but
     # it's what we have to work with.
-    shipping_span_text = shipping_node.text.strip()
+    if shipping_node.text:
+        shipping_span_text = shipping_node.text.strip()
+    else:
+        shipping_span_text = ""
     if shipping_node.tag == "div":
+        # Do we have any spans outlining the price?  Typically seen like this:
+        # <div class="a-row aod-ship-charge">
+        #     <span class="a-size-base a-color-base">+</span>
+        #     <span class="a-size-base a-color-base">S$21.44</span>
+        #     <span class="a-size-base a-color-base">shipping</span>
+        # </div>
+        shipping_spans = shipping_node.xpath(".//span")
+        if shipping_spans:
+            log.debug(
+                f"Found {len(shipping_spans)} shipping SPANs within the shipping DIV"
+            )
+            # Look for a price
+            for shipping_span in shipping_spans:
+                if shipping_span.text and shipping_span.text != "+":
+                    shipping_cost: Price = parse_price(shipping_span.text)
+                    if shipping_cost.currency is not None:
+                        log.debug(
+                            f"Found parseable price with currency symbol: {shipping_cost.currency}"
+                        )
+                        return shipping_cost
+
         if shipping_span_text == "":
             # Assume zero shipping for an empty div
             log.debug(
@@ -1534,3 +1731,65 @@ def get_shipping_costs(tree, free_shipping_string):
                 f"Unable to locate price.  Assuming 0.  Found this: '{shipping_span_text}'  Consider reporting to #tech-support Discord."
             )
     return FREE_SHIPPING_PRICE
+
+
+class AmazonItemCondition(Enum):
+    # See https://sellercentral.amazon.com/gp/help/external/200386310?language=en_US&ref=efph_200386310_cont_G1831
+    New = 10
+    Renewed = 20
+    Refurbished = 20
+    Rental = 30
+    Open_box = 40
+    UsedLikeNew = 40
+    UsedVeryGood = 50
+    UsedGood = 60
+    UsedAcceptable = 70
+    CollectibleLikeNew = 40
+    CollectibleVeryGood = 50
+    CollectibleGood = 60
+    CollectibleAcceptable = 70
+    Unknown = 1000
+
+    @classmethod
+    def from_str(cls, label):
+        # Straight lookup
+        try:
+            condition = AmazonItemCondition[label]
+            return condition
+        except KeyError:
+            # Key doesn't exist as a Member, so try cleaning up the string
+            cleaned_label = "".join(label.split())
+            cleaned_label = cleaned_label.replace("-", "")
+            try:
+                condition = AmazonItemCondition[cleaned_label]
+                return condition
+            except KeyError:
+                raise NotImplementedError
+
+
+def get_item_condition(form_action) -> AmazonItemCondition:
+    """ Attempts to determine the Item Condition from the Add To Cart form action """
+    if "_new_" in form_action:
+        # log.debug(f"Item condition is new")
+        return AmazonItemCondition.New
+    elif "_used_" in form_action:
+        # log.debug(f"Item condition is used")
+        return AmazonItemCondition.UsedGood
+    elif "_col_" in form_action:
+        # og.debug(f"Item condition is collectible")
+        return AmazonItemCondition.CollectibleGood
+    else:
+        # log.debug(f"Item condition is unknown: {form_action}")
+        return AmazonItemCondition.Unknown
+
+
+def wait_for_element_by_xpath(d, xpath, timeout=10):
+    try:
+        WebDriverWait(d, timeout).until(
+            EC.presence_of_element_located((By.XPATH, xpath))
+        )
+    except sel_exceptions.TimeoutException:
+        log.error(f"failed to find {xpath}")
+        return False
+
+    return True
