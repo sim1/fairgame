@@ -57,7 +57,7 @@ AMAZON_URLS = {
 }
 CHECKOUT_URL = "https://{domain}/gp/cart/desktop/go-to-checkout.html/ref=ox_sc_proceed?partialCheckoutCart=1&isToBeGiftWrappedBefore=0&proceedToRetailCheckout=Proceed+to+checkout&proceedToCheckout=1&cartInitiateId={cart_id}"
 
-AUTOBUY_CONFIG_PATH = "config/amazon_config.json"
+AUTOBUY_CONFIG_PATH = os.getenv("AUTOBUY_CONFIG_PATH", "config/amazon_config.json")
 
 BUTTON_XPATHS = [
     '//input[@name="placeYourOrder1"]',
@@ -1578,7 +1578,8 @@ class Amazon:
         except FileNotFoundError:
             pass
         try:
-            self.driver = webdriver.Chrome(executable_path=binary_path, options=options)
+            cd_path = os.getenv("CHROMEDRIVER_PATH", binary_path)
+            self.driver = webdriver.Chrome(executable_path=cd_path, options=options)
             self.wait = WebDriverWait(self.driver, 10)
             self.get_webdriver_pids()
         except Exception as e:
