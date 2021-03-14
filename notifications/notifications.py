@@ -19,7 +19,7 @@
 
 import queue
 import threading
-from os import path
+from os import path, getenv
 from playsound import playsound
 import apprise
 
@@ -27,7 +27,7 @@ from utils.logger import log
 
 TIME_FORMAT = "%Y-%m-%d @ %H:%M:%S"
 
-APPRISE_CONFIG_PATH = "config/apprise.conf"
+APPRISE_CONFIG_PATH = getenv("APPRISE_CONFIG_PATH", "config/apprise.conf")
 NOTIFICATION_SOUND_PATH = "notifications/notify.mp3"
 PURCHASE_SOUND_PATH = "notifications/purchase.mp3"
 ALARM_SOUND_PATH = "notifications/alarm-frenzy-493.mp3"

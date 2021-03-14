@@ -11,7 +11,8 @@ RUN apk add --virtual=.run-deps tini chromium chromium-chromedriver openssl zlib
 
 ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver \
     CREDENTIAL_FILE=/config/credentials \
-    AUTOBUY_CONFIG_PATH=/config/config
+    AUTOBUY_CONFIG_PATH=/config/config \
+    APPRISE_CONFIG_PATH=/config/apprise
 
 COPY . /app
 ENTRYPOINT ["/sbin/tini", "--"]
