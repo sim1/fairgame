@@ -17,4 +17,6 @@
 #      The author may be contacted through the project's GitHub, at:
 #      https://github.com/Hari-Nagarajan/fairgame
 
-version = Version("sim1-git")
+from packaging.version import Version
+
+version = Version("0.0.0+github.sim1")

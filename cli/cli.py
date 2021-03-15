@@ -42,7 +42,7 @@ import time
 from notifications.notifications import NotificationHandler, TIME_FORMAT
 from utils.logger import log
 from common.globalconfig import GlobalConfig, AMAZON_CREDENTIAL_FILE
-from utils.version import is_latest, version
+from utils.version import version
 from stores.amazon import Amazon
 from stores.bestbuy import BestBuyHandler
 
