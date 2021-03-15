@@ -335,16 +335,7 @@ main.add_command(bestbuy)
 main.add_command(test_notifications)
 main.add_command(show)
 
-# Global scope stuff here
-if is_latest():
-    log.info(f"FairGame v{version}")
-elif version.is_prerelease:
-    log.warning(f"FairGame PRE-RELEASE v{version}")
-else:
-    log.warning(
-        f"You are running FairGame v{version.release}, but the most recent version is v{version.get_latest_version()}. "
-        f"Consider upgrading "
-    )
+log.info(f"FairGame {version}")
 
 global_config = GlobalConfig()
 notification_handler = NotificationHandler()
